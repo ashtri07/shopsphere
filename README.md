@@ -4,113 +4,123 @@ ShopSphere is a hands-on DevOps learning project: a small e-commerce application
 
 The goal is not to hide complexity behind a large sample application. Each service, container image, Kubernetes resource, Helm template, and CI/CD workflow will be introduced in small steps and documented so that the author can explain what each part does and why it exists.
 
+## Current application milestone
+
+The first runnable full-stack slice is now in the repository:
+
+- **Product Service:** Java 21 + Spring Boot, with a small in-memory catalog.
+- **Order Service:** Java 21 + Spring Boot, with validation and in-memory orders.
+- **Frontend:** React + Vite storefront that calls both APIs.
+- **Tests and CI:** Maven tests for the backend services; Product Service GitHub Actions workflow.
+
+This is a learning/demo application, not a production commerce system. It has no authentication, payment handling, database, durable order storage, or real inventory reservation. Orders are lost when the Order Service restarts. The Order Service temporarily has its own copy of product IDs/prices so it can run independently; service-to-service integration is a later exercise.
+
+## Run the full stack locally
+
+Requirements: Java 21, Maven, Node.js 22 (or a supported LTS version), and npm.
+
+Open three terminals from the repository root.
+
+**Terminal 1 — Product Service**
+
+```bash
+cd services/product-service
+mvn test
+mvn spring-boot:run
+```
+
+API base URL: `http://localhost:8080`
+
+**Terminal 2 — Order Service**
+
+```bash
+cd services/order-service
+mvn test
+SERVER_PORT=8081 mvn spring-boot:run
+```
+
+API base URL: `http://localhost:8081`
+
+On Windows PowerShell, set the port with `$env:SERVER_PORT="8081"; mvn spring-boot:run`.
+
+**Terminal 3 — Frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite, normally `http://localhost:5173`.
+
+## Try the APIs
+
+List products:
+
+```bash
+curl -i http://localhost:8080/api/products
+```
+
+Create a demo order:
+
+```bash
+curl -i -X POST http://localhost:8081/api/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"customerName":"Asha","items":[{"productId":"sku-1002","quantity":2}]}'
+```
+
+List orders created by the running Order Service:
+
+```bash
+curl -i http://localhost:8081/api/orders
+```
+
 ## Learning goals
 
-- Build and test a small Java/Spring Boot backend and React/Vite frontend.
-- Understand service boundaries, HTTP APIs, configuration, and failure handling.
+- Understand HTTP APIs, Java/Spring Boot, React, tests, and local configuration.
 - Package applications in Docker images and publish them to Amazon ECR.
-- Deploy to EKS with hand-written Kubernetes manifests, then package those manifests as a Helm chart.
-- Build CI pipelines with GitHub Actions and use GitHub OIDC to obtain short-lived AWS credentials (no long-lived AWS access keys in repository secrets).
+- Deploy to EKS with hand-written Kubernetes manifests, then package them as a Helm chart.
+- Build CI pipelines with GitHub Actions and use GitHub OIDC for short-lived AWS credentials (no long-lived AWS access keys in repository secrets).
 - Use Argo CD to practice GitOps reconciliation and safe rollout/rollback workflows.
 - Reproduce and diagnose common failures: bad image tags, crash loops, broken probes, bad configuration, service discovery issues, and failing CI.
-- Keep the infrastructure lean and make cost cleanup part of the project.
+- Keep infrastructure lean and make cost cleanup part of the project.
 
 ## Planned architecture
-
-The architecture will grow incrementally. The first milestone will be a single, testable vertical slice—not all services at once.
 
 ```text
 Browser
   |
   v
 React + Vite frontend
-  |
-  v
-Spring Boot API gateway
-  |---------------------|
-  v                     v
-Product service     Order service
-                         |
-                         v
-                 Notification service
+  |-------------------------------|
+  v                               v
+Product Service               Order Service
+(read catalog)                (create/list orders)
 ```
 
-Initial service responsibilities:
-
-| Component | Responsibility | Initial data strategy |
-|---|---|---|
-| Frontend | Product list and simple order flow | Calls backend APIs |
-| API gateway | Single backend entry point and routing | Stateless |
-| Product service | List and retrieve products | In-memory sample catalog |
-| Order service | Validate and create an order | In-memory orders |
-| Notification service | Demonstrate a downstream action | Simple HTTP call/logging first |
-
-The first version intentionally avoids a managed database, message broker, NAT Gateway, and observability stack. Those can be considered later as separate learning exercises with an explicit cost/complexity decision.
+As the basics are understood, we'll introduce an API gateway and notification service as separate milestones rather than creating empty placeholder services now.
 
 ## Technology choices
 
-- **Backend:** Java and Spring Boot, built with Maven
-- **Frontend:** React and Vite, built with npm
-- **Containerization:** Docker
-- **Registry and runtime:** Amazon ECR and Amazon EKS in AWS Mumbai (`ap-south-1`)
-- **Deployment:** Kubernetes manifests first, then a Helm chart
-- **CI:** GitHub Actions
-- **AWS federation:** GitHub Actions OIDC with narrowly scoped IAM permissions
-- **GitOps:** Argo CD
+- Backend: Java and Spring Boot, built with Maven
+- Frontend: React and Vite, built with npm
+- Containerization: Docker
+- Registry and runtime: Amazon ECR and Amazon EKS in AWS Mumbai (`ap-south-1`)
+- Deployment: Kubernetes manifests first, then a Helm chart
+- CI: GitHub Actions
+- AWS federation: GitHub Actions OIDC with narrowly scoped IAM permissions
+- GitOps: Argo CD
 
-Versions will be pinned or recorded as the project is implemented. The application and deployment files will be authored in this repository rather than copied wholesale from a complex reference application.
+## Next milestones
 
-## Repository layout (planned)
-
-```text
-.
-├── frontend/
-├── services/
-│   ├── api-gateway/
-│   ├── product-service/
-│   ├── order-service/
-│   └── notification-service/
-├── deploy/
-│   ├── kubernetes/
-│   ├── helm/
-│   └── argocd/
-├── .github/
-│   └── workflows/
-└── docs/
-```
-
-Directories will be added when they contain useful, working files; the repository will not be filled with placeholder manifests for components that do not exist yet.
-
-## Delivery roadmap
-
-1. **Foundation:** document the architecture, repository conventions, and learning sequence.
-2. **First vertical slice:** implement the product API and a small frontend; add tests and local run instructions.
-3. **Order flow:** add order creation and the notification demonstration, with clear API contracts.
-4. **Containers:** write and understand a Dockerfile per deployable component; build and test images locally.
-5. **Kubernetes:** deploy with hand-written manifests, Services, configuration, resource requests/limits, and health probes.
-6. **ECR and EKS:** publish images and deploy to the existing learning cluster.
-7. **Helm:** refactor the working manifests into a small chart and learn values/templates.
-8. **CI with OIDC:** test and build on pull requests; publish images securely from approved branches.
-9. **Argo CD:** introduce GitOps reconciliation after the manual deployment flow is understood.
-10. **Failure drills:** deliberately introduce common deployment and pipeline faults, diagnose them, and document recovery.
-11. **Cost and cleanup:** record what incurs charges and provide repeatable teardown/recovery instructions.
-
-Milestones will be implemented one at a time. A roadmap item is not considered complete until its files, run commands, and verification steps are documented.
-
-## Working principles
-
-- Prefer the smallest working change that teaches one concept.
-- Explain why every manifest field, dependency, and workflow permission exists.
-- Keep secrets out of Git. Use workload identity/OIDC rather than static AWS credentials.
-- Add resource requests and limits; avoid unnecessary replicas and always-on managed services in a budget-constrained lab.
-- Include a verification step for each operational change.
-- Document cleanup before creating any resource that can incur recurring charges.
-- Never commit generated credentials, kubeconfig files, local environment files, or build outputs.
+1. Add container build files and test images locally.
+2. Add health endpoints, resource requests/limits, and hand-written Kubernetes manifests.
+3. Publish images to ECR and deploy to the existing EKS cluster.
+4. Package the working manifests as a Helm chart.
+5. Add secure image-build/publish workflows using GitHub OIDC.
+6. Introduce Argo CD after the manual deployment flow is understood.
+7. Practice failure drills and document troubleshooting/cleanup.
 
 ## Cost warning
 
-Amazon EKS charges for the cluster control plane while the cluster exists, even when the application has no traffic. EC2 instances, EBS volumes, public IPv4 addresses, load balancers, and data transfer can add charges. Avoid leaving the lab running when it is not in use, and review the current AWS pricing and billing dashboard before enabling additional resources.
-
-## Status
-
-**Current milestone:** repository foundation. Application code, containers, manifests, Helm, CI, and GitOps will be added incrementally and verified as each milestone is reached.
+Amazon EKS charges for the cluster control plane while the cluster exists, even when the application has no traffic. EC2 instances, EBS volumes, public IPv4 addresses, load balancers, and data transfer can add charges. Avoid leaving the lab running when it is not in use, and review the AWS billing dashboard before enabling additional resources.
