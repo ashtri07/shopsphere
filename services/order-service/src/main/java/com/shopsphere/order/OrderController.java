@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @RestController
+@CrossOrigin(origins = "http://localhost:5173")
 @RequestMapping("/api/orders")
 public class OrderController {
     private static final List<CatalogItem> CATALOG = List.of(
